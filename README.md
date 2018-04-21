@@ -14,3 +14,7 @@
 ## Coverage
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Coverage/81e34052f9f4418ca168cbcb6e60dbd9)](https://www.codacy.com/app/avrz237/proyectoModeladoDatos?utm_source=github.com&utm_medium=referral&utm_content=andresVr/proyectoModeladoDatos&utm_campaign=Badge_Coverage)
+
+## Synk
+
+[![Known Vulnerabilities](https://snyk.io/test/github/andresvr/proyectomodeladodatos/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/andresvr/proyectomodeladodatos?targetFile=requirements.txt)
