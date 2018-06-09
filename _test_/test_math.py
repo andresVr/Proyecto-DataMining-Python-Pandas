@@ -3,9 +3,7 @@ from faker import Faker
 from odd_number import OddNumber
 
 
-
 class MathTestCase(unittest.TestCase):
-
     def setUp(self):
         self.fake = Faker()
 
