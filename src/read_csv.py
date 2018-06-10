@@ -1,5 +1,5 @@
 from pandas import pandas
-
+import numpy as np
 
 def clean_data(interval, drop_columns):
     print("*******Formatting Scenario Start*******")
@@ -31,7 +31,32 @@ def util_drop_column(col, df):
     return  result_process(col)
 
 
-def add_previous_columns():
+def util_create_scenary(df):
+    final = None
+    for x in range (1,3000):
+        final_data = util_scenario(df.iloc[x],df, x)
+        if x == 1:
+            final = pandas.DataFrame(data=final_data)
+            final = final.T
+        else:
+            final_tmp = pandas.DataFrame(data=final_data)
+            final_tmp = final_tmp.T
+            final = final.append(final_tmp)
+    return final
+
+def util_scenario(item,df, index):
+    historic_data_set = util_process_historical_values(df, 30, index, 'mq135')
+    historic_data_set_2 = util_process_historical_values(df, 30, index, 'temperature')
+    historic_data_set = np.concatenate(([item['cnv_date']],historic_data_set))
+    historic_final_data = np.concatenate((historic_data_set, historic_data_set_2))
+    return historic_final_data
+
+def util_process_historical_values(df, periodicity_key,start_index,col_name):
+    return df.iloc[start_index:periodicity_key + start_index][col_name].values
+
+
+
+def add_previous_columns(periodicity_key):
     # read clean csv
     df = pandas.read_csv('../data/dataTemp.csv')
 
@@ -41,24 +66,34 @@ def add_previous_columns():
     # order by date desc
     df = df.sort_values(by = 'cnv_date', ascending=0)
 
-    df['minute'] = df['cnv_date'].dt.minute
-    df['hour'] = df['cnv_date'].dt.hour
-    df['month'] = df['cnv_date'].dt.month
-    df['second'] = df['cnv_date'].dt.second
-    df['year'] = df['cnv_date'].dt.year
+    # add time variable for historical values
+    df[time_variables_columns(periodicity_key)] = previous_data_historic(periodicity_key,df)
+
+    # create scenary
+    scenary = util_create_scenary(df)
+    scenary.to_csv('../data/finalData.csv')
+    print(scenary)
 
 
-    print(df)
-    #print(previous_date)
 
-def previous_data_frecuency(key):
-    historic_frecuency = {'m': "df['cnv_date'].dt.minute",
-                          'h':"df['cnv_date'].dt.hour}",
-                          'M':"df['cnv_date'].dt.month",
-                          's': "df['cnv_date'].dt.second",
-                          'y': "df['cnv_date'].dt.year"}
+def previous_data_historic(key,df):
+    historic_frequency = {'m': df['cnv_date'].dt.minute,
+                          'h': df['cnv_date'].dt.hour,
+                          'M': df['cnv_date'].dt.month,
+                          's': df['cnv_date'].dt.second,
+                          'y': df['cnv_date'].dt.year}
+    return historic_frequency.get(key)
+
+
+def time_variables_columns(key):
+    time = {'m': "minute",
+            'h': "hour}",
+            'M': "month",
+            's': "second",
+            'y': "dt.year"}
+    return time.get(key)
 
 if __name__ == "__main__":
 
     clean_data('T',['date','node','location','humidity','mq2','mq7'])
-    add_previous_columns()
+    add_previous_columns('m')
