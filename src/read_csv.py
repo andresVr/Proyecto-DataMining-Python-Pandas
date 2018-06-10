@@ -10,8 +10,7 @@ def clean_data(interval, drop_columns):
     df['cnv_date'] = date_set
 
     # drop unnecessary columns
-    for column in drop_columns:
-        df = df.drop(column, 1)
+    df = util_drop_column(drop_columns,df)
 
     # group data using interval for T= hour, M= month, S= second
     grouping_data_set = df.set_index('cnv_date').resample(interval)['mq135','temperature'].mean()
@@ -27,7 +26,12 @@ def clean_data(interval, drop_columns):
     print("*******Formatting Scenario 1 Done*******")
 
 
-def define_scenario():
+def util_drop_column(col, df):
+    result_process = lambda item: df.drop(col, 1)
+    return  result_process(col)
+
+
+def add_previous_columns():
     # read clean csv
     df = pandas.read_csv('../data/dataTemp.csv')
 
@@ -35,13 +39,26 @@ def define_scenario():
     df['cnv_date'] = pandas.to_datetime(df.cnv_date, infer_datetime_format=True)
 
     # order by date desc
-    sort_date = df.sort_values(by = 'cnv_date', ascending=0)
+    df = df.sort_values(by = 'cnv_date', ascending=0)
 
-    print(sort_date)
+    df['minute'] = df['cnv_date'].dt.minute
+    df['hour'] = df['cnv_date'].dt.hour
+    df['month'] = df['cnv_date'].dt.month
+    df['second'] = df['cnv_date'].dt.second
+    df['year'] = df['cnv_date'].dt.year
 
+
+    print(df)
+    #print(previous_date)
+
+def previous_data_frecuency(key):
+    historic_frecuency = {'m': "df['cnv_date'].dt.minute",
+                          'h':"df['cnv_date'].dt.hour}",
+                          'M':"df['cnv_date'].dt.month",
+                          's': "df['cnv_date'].dt.second",
+                          'y': "df['cnv_date'].dt.year"}
 
 if __name__ == "__main__":
 
-    clean_data('10T', ['date','node','location','humidity','mq2','mq7'])
-
-    define_scenario()
+    clean_data('T',['date','node','location','humidity','mq2','mq7'])
+    add_previous_columns()
