@@ -1,5 +1,7 @@
 from pandas import pandas
 import numpy as np
+from sklearn.model_selection import train_test_split
+
 
 def clean_data(interval, drop_columns):
     print("*******Formatting Scenario Start*******")
@@ -8,6 +10,11 @@ def clean_data(interval, drop_columns):
     # transform timestamp to datetime
     date_set = pandas.to_datetime(df.date, unit='s')
     df['cnv_date'] = date_set
+
+    # create error_columns from mq135,7 and 2
+    df['mq2_error'] = df.mq2 * 0.02
+    df['mq7_error'] = df.mq7 * 0.02
+    df['mq135_error'] = df.mq135 * 0.02
 
     # drop unnecessary columns
     df = util_drop_column(drop_columns,df)
@@ -31,10 +38,10 @@ def util_drop_column(col, df):
     return  result_process(col)
 
 
-def util_create_scenary(df):
+def util_create_scenery(df, historic_count):
     final = None
-    for x in range (1,3000):
-        final_data = util_scenario(df.iloc[x],df, x)
+    for x in range(1,100):  # df['cnv_date'].size):
+        final_data = util_scenario(df.iloc[x],df, x, historic_count)
         if x == 1:
             final = pandas.DataFrame(data=final_data)
             final = final.T
@@ -44,19 +51,20 @@ def util_create_scenary(df):
             final = final.append(final_tmp)
     return final
 
-def util_scenario(item,df, index):
-    historic_data_set = util_process_historical_values(df, 30, index, 'mq135')
-    historic_data_set_2 = util_process_historical_values(df, 30, index, 'temperature')
+
+def util_scenario(item,df, index, historic_count):
+    historic_data_set = util_process_historical_values(df, historic_count, index, 'mq135')
+    historic_data_set_2 = util_process_historical_values(df, historic_count, index, 'temperature')
     historic_data_set = np.concatenate(([item['cnv_date']],historic_data_set))
     historic_final_data = np.concatenate((historic_data_set, historic_data_set_2))
     return historic_final_data
+
 
 def util_process_historical_values(df, periodicity_key,start_index,col_name):
     return df.iloc[start_index:periodicity_key + start_index][col_name].values
 
 
-
-def add_previous_columns(periodicity_key):
+def add_previous_columns(periodicity_key, archive_name, test_size, historic_count):
     # read clean csv
     df = pandas.read_csv('../data/dataTemp.csv')
 
@@ -69,11 +77,23 @@ def add_previous_columns(periodicity_key):
     # add time variable for historical values
     df[time_variables_columns(periodicity_key)] = previous_data_historic(periodicity_key,df)
 
-    # create scenary
-    scenary = util_create_scenary(df)
-    scenary.to_csv('../data/finalData.csv')
-    print(scenary)
+    # create new data
+    data = util_create_scenery(df,historic_count)
 
+    # separate train and test data from an percentage parameter
+    train, test = train_test_split(data, test_size=test_size)
+
+    # create 2 csv files, from train and test
+    test_path = '../data/results/' + archive_name + '_test' + '.csv'
+    train_path = '../data/results/' + archive_name + '_train' + '.csv'
+    path = '../data/results/' + archive_name + '.csv'
+
+    train.to_csv(train_path,header=None,index=False)
+    test.to_csv(test_path,header=None,index=False)
+    data.to_csv(path, header=None, index=False)
+
+    print('*******Create Data Successfully*******')
+    print('******* ' + archive_name + ' Done' + '*******')
 
 
 def previous_data_historic(key,df):
@@ -85,6 +105,11 @@ def previous_data_historic(key,df):
     return historic_frequency.get(key)
 
 
+def create_scenarios(interval, drop_columns, periodicity_key, archive_name, test_size,historic_count):
+    clean_data('T', ['date', 'node', 'location', 'humidity', 'mq2', 'mq7'])
+    add_previous_columns('m', 'first_scenery', test_size, historic_count)
+
+
 def time_variables_columns(key):
     time = {'m': "minute",
             'h': "hour}",
@@ -94,6 +119,4 @@ def time_variables_columns(key):
     return time.get(key)
 
 if __name__ == "__main__":
-
-    clean_data('T',['date','node','location','humidity','mq2','mq7'])
-    add_previous_columns('m')
+    create_scenarios('T',['date','node','location','humidity','mq2','mq7'],'m','first_scenery', 0.3, 8)
