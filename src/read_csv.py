@@ -88,12 +88,19 @@ def time_variables_columns(key):
 
 
 def create_scenarios(interval, periodicity_key,historic_count,
-                     test_size, create_complete_csv):
+                     test_size, create_complete_csv,scenary):
 
-    drop_columns_data = elements_comb_array()
+
+    #drop_columns_data = elements_comb_array()
+    drop_columns_data = scenary
 
     def predicate(param): create_scenario(interval,param, periodicity_key, test_size,historic_count, create_complete_csv)
     py_.for_each(drop_columns_data, predicate)
+
+
+def specific_scenery():
+    return {'scenery': {'scenery', 'date', 'node', 'location', 'humidity', 'mq2_error', 'mq7_error',
+                  'mq135_error','temperature'}}
 
 
 def elements_comb_array():
@@ -117,8 +124,9 @@ def elements_comb_array():
 if __name__ == "__main__":
     # T = 1 minute interval, m = minute backward, 0.3= % test, 8 = historic data count backward, False= if you
     # do not require complete data set to csv
+
     try:
-        create_scenarios('30T', 'm', 4, 0.3, False)
+        create_scenarios('16T', 'm', 7, 0.3, True,specific_scenery())
     except:
         print("Not enough data to process")
     #elements_comb_array()
