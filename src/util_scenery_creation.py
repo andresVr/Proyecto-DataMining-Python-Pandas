@@ -15,11 +15,15 @@ class UtilitySceneryCreation:
         return UtilitySceneryCreation.__instance
 
     def __init__(self):
+        self.array_columns_order = [const.TIMESTAMP_COLUMN]
         """ Virtually private constructor. """
         if UtilitySceneryCreation.__instance is not None:
             raise Exception("UtilitySceneryCreation class is a singleton!")
         else:
             UtilitySceneryCreation.__instance = self
+
+
+
 
     def put_data_set(self):
         data_frame = self.util_read_data_set()
@@ -45,8 +49,8 @@ class UtilitySceneryCreation:
 
     def util_create_scenery(self,df, historic_count, drop_columns):
         final = df
-        for x in range(const.FIRST_INDEX, 100):  # df[const.DATE_COLUMN].size):
-            final_data = self.util_scenario(df.iloc[x], df, x, historic_count, drop_columns)
+        for x in range(const.FIRST_INDEX, df[const.DATE_COLUMN].size):
+            final_data = self.util_scenario(df.iloc[x], df, x+const.ONE, historic_count, drop_columns)
             if x == const.ONE_INDEX:
                 final = pandas.DataFrame(data=final_data)
                 final = final.T
@@ -54,29 +58,51 @@ class UtilitySceneryCreation:
                 final_tmp = pandas.DataFrame(data=final_data)
                 final_tmp = final_tmp.T
                 final = final.append(final_tmp)
+        # put header in df
+        final.columns = self.array_columns_order
+        # initialize columns array
+        self.init_columns_array()
+        # drop row that contains NaN
+        final = final.dropna()
         return final
+
+    def create_header_array(self, array_len, key):
+        for item in reversed(range(array_len)):
+            column = key + '-' + str(item+const.ONE)
+            if column not in self.array_columns_order:
+                self.array_columns_order.append(column)
 
     def util_scenario(self,item, df, index, historic_count, drop_columns):
         scenery_columns = self.util_get_scenery_columns(drop_columns)
-        historic_data_set = []
+        historic_data_set = {}
 
-        def predicate(param): historic_data_set.append(self.util_process_historical_values(df, historic_count, index, param))
+        def predicate(param): historic_data_set.update({param:self.util_process_historical_values(df, historic_count, index, param)})
 
         py_.for_each(scenery_columns, predicate)
         historic_final_data = np.array([item[const.DATE_COLUMN]])
 
-        for object_array in historic_data_set:
-            aux_column = np.array(object_array)
+        for key,values in historic_data_set.items():
+            aux_column = np.array(values)
             historic_final_data = np.concatenate((historic_final_data, aux_column))
-
+            if key not in self.array_columns_order:
+                self.create_header_array(len(values), key)
         return historic_final_data
+
+    @staticmethod
+    def util_find_key_by_value(self,value,l_dictionary):
+        l_key = [key for key, value in l_dictionary.iteritems() if value == value][const.ZERO]
+        return l_key
+
+    def init_columns_array(self):
+        self.array_columns_order = [const.TIMESTAMP_COLUMN]
 
     def util_get_scenery_columns(self,drop_columns):
         return self.get_column_headers_def() - drop_columns
 
     @staticmethod
     def util_process_historical_values(df, periodicity_key, start_index, col_name):
-        return df.iloc[start_index:periodicity_key + start_index][col_name].values
+        array = df.iloc[start_index:periodicity_key + start_index][col_name].values
+        return np.flipud(array)
 
     @staticmethod
     def previous_data_historic(key, df):
@@ -103,3 +129,32 @@ class UtilitySceneryCreation:
             , const.TEMPERATURE_COLUMN
         }
         return column_headers
+
+    @staticmethod
+    def get_combine_vars():
+        column_headers = [
+              const.HUMIDITY_COLUMN
+            , const.MQ2_COLUMN
+            , const.MQ7_COLUMN
+            , const.MQ2_ERROR_COLUMN
+            , const.MQ7_ERROR_COLUMN
+            , const.MQ135_ERROR_COLUMN
+            , const.MQ135_COLUMN
+            , const.TEMPERATURE_COLUMN
+        ]
+        return column_headers
+
+    def potency(self,c):
+        """potency of c
+        """
+        if len(c) == const.ZERO:
+            return [[]]
+        r = self.potency(c[:const.MINUS_ONE])
+        return r + [s + [c[const.MINUS_ONE]] for s in r]
+
+    def comb(self,c, n):
+        """list of combination of n elements
+            one by one
+        """
+        return [s for s in self.potency(c) if len(s) == n]
+
