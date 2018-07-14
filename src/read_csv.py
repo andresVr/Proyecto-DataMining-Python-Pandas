@@ -122,8 +122,8 @@ class ReadData:
         self.add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count,
                                   create_complete_csv, prediction)
 
-
-    def time_variables_columns(self,key):
+    @staticmethod
+    def time_variables_columns(key):
         '''
         time variables set
         :param key: key to get variable value
@@ -166,7 +166,7 @@ class ReadData:
                                                                     item+1)
             array_elements.extend(array_elements_tmp)
 
-        for x in range(len(array_elements)):
+        for x in range(enumerate(array_elements)):
             archive_name = str(x) + '_scenery'
             array_elements[x].insert(const.FIRST_INDEX,'location')
             array_elements[x].insert(const.FIRST_INDEX,'node')

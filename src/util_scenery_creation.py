@@ -109,7 +109,8 @@ class UtilitySceneryCreation:
         df = self.util_drop_column(index_collection, df)
         return df
 
-    def find_prediction_columns(self,header_list,comparator_string):
+    @staticmethod
+    def find_prediction_columns(header_list,comparator_string):
         comparator_string = comparator_string.split("-")
         prediction_columns = list(filter(lambda item:re.findall(comparator_string[0],item),header_list))
         return prediction_columns
