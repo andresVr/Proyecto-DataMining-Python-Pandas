@@ -1,190 +1,182 @@
 from pandas import pandas
-import numpy as np
-from sklearn.model_selection import train_test_split
 from pydash import py_
+from sklearn.model_selection import train_test_split
+from termcolor import colored
+import constants as const
+import util_scenery_creation as sc_util
 
 
-def read_data_set():
-    data_frame = pandas.read_csv('../data/data.csv')
+class ReadData:
 
-    # transform timestamp to datetime
-    date_set = pandas.to_datetime(data_frame.date, unit='s')
-    data_frame['cnv_date'] = date_set
+    def __init__(self):
+        # util class object
+        self.utility_scenery_function = sc_util.UtilitySceneryCreation.get_instance()
 
-    # create error_columns from mq135,7 and 2
-    data_frame['mq2_error'] = data_frame.mq2 * 0.02
-    data_frame['mq7_error'] = data_frame.mq7 * 0.02
-    data_frame['mq135_error'] = data_frame.mq135 * 0.02
-    return data_frame
+    def clean_data(self,interval, drop_columns, scenery_name):
+        '''
+        it allows to clean data to process
+        :param interval: it is the grouping parameter for data
+        :param drop_columns: it is a set of unnecessary columns
+        :param scenery_name: scenery name file
+        :return: nothing
+        '''
+        print("*******Formatting Scenario Start*******")
 
+        # put base data set to clean
+        df = self.utility_scenery_function.put_data_set()
 
-def clean_data(interval, drop_columns):
-    print("*******Formatting Scenario Start*******")
+        # drop unnecessary columns
+        df = self.utility_scenery_function.util_drop_column(drop_columns,df)
 
-    # put base data set to clean
-    df = read_data_set()
+        # group data using interval for T= minute, M= month, S= second, H= hour
+        grouping_data_set = df.set_index(const.DATE_COLUMN).resample(interval).mean()
 
-    # drop unnecessary columns
-    df = util_drop_column(drop_columns,df)
+        # change NaN (empty data) to 0
+        if const.TEMPERATURE in df.columns:
+            grouping_data_set[const.TEMPERATURE].fillna(const.ZERO)
 
-    # group data using interval for T= hour, M= month, S= second
-    grouping_data_set = df.set_index('cnv_date').resample(interval).mean()
+        if const.HUMIDITY in df.columns:
+            grouping_data_set[const.HUMIDITY].fillna(const.ZERO)
 
-    # change NaN (empty data) to 0
-    if 'temperature' in df.columns:
-        grouping_data_set['temperature'].fillna(0)
+        # set group data to a new data frame to export
+        clean_data_set = grouping_data_set
 
-    if 'humidity' in df.columns:
-        grouping_data_set['humidity'].fillna(0)
+        # export to csv
+        clean_data_set.to_csv('../data/dataTemp.csv')
+        print("*******Formatting Scenario" + scenery_name + "Done*******")
 
-    # set group data to a new data frame to export
-    clean_data_set = grouping_data_set
+    def add_previous_columns(self,drop_columns,periodicity_key, archive_name, test_size, historic_count,
+                             create_complete_csv, prediction):
+        '''
+        formating data to create csv
+        :param drop_columns: columns set to drop
+        :param periodicity_key:
+        :param archive_name:
+        :param test_size:
+        :param historic_count:
+        :param create_complete_csv:
+        :param prediction: prediction for scenery creation
+        :return:
+        '''
+        # read clean csv
+        df = pandas.read_csv('../data/dataTemp.csv')
 
-    # export to csv
-    clean_data_set.to_csv('../data/dataTemp.csv')
-    print("*******Formatting Scenario 1 Done*******")
+        # transform object to date
+        df[const.DATE_COLUMN] = pandas.to_datetime(df.cnv_date, infer_datetime_format=True)
 
+        # order by date desc
+        df = df.sort_values(by=const.DATE_COLUMN, ascending=const.ZERO)
 
-def util_drop_column(col, df):
-    result_process = lambda item: df.drop(col, 1)
-    return result_process(col)
+        # add time variable for historical values
+        df[self.time_variables_columns(periodicity_key)] = self.utility_scenery_function.previous_data_historic(periodicity_key,df)
 
+        # create new data
+        data = self.utility_scenery_function.util_create_scenery(df,historic_count,drop_columns,prediction)
 
-def util_create_scenery(df, historic_count,drop_columns):
-    final = df
-    for x in range(0,100):  # df['cnv_date'].size):
-        final_data = util_scenario(df.iloc[x],df, x, historic_count,drop_columns)
-        if x == 1:
-            final = pandas.DataFrame(data=final_data)
-            final = final.T
+        if data is not None:
+            # separate train and test data from an percentage parameter
+            train, test = train_test_split(data, test_size=test_size)
+
+            # create 2 csv files, from train and test
+            test_path = '../data/results/' + archive_name + '_test' + '.csv'
+            train_path = '../data/results/' + archive_name + '_train' + '.csv'
+
+            if not create_complete_csv:
+                train.to_csv(train_path, index=False)
+                test.to_csv(test_path,index=False)
+
+            # if you need complete data set
+            if create_complete_csv:
+                path = '../data/results/' + archive_name + '.csv'
+                data.to_csv(path, index=False)
+
+            print(colored('*******Create Data Successfully*******','green'))
+            print(colored('******* ' + archive_name + ' Done' + '*******','green'))
+
         else:
-            final_tmp = pandas.DataFrame(data=final_data)
-            final_tmp = final_tmp.T
-            final = final.append(final_tmp)
-    return final
+            print(colored('*******The scenery do not have mq variable to predict*******','red'))
+            print(colored('******* ' + archive_name + ' Dropped' + '*******','red'))
 
 
-def util_scenario(item,df, index, historic_count,drop_columns):
-    scenery_columns = get_scenery_columns(drop_columns)
-    historic_data_set = []
+    def create_scenario(self,interval, drop_columns, periodicity_key,
+                        test_size,historic_count, create_complete_csv,prediction):
+        '''
+        it allows to separate archive name to the complete set
+        :param interval: it is the grouping parameter for data
+        :param drop_columns: drop columns data set
+        :param periodicity_key: forward unit
+        :param test_size: percentage test value (o-1)
+        :param historic_count: historic data count
+        :param create_complete_csv: flag that allows to create complete scenery
+        or 2 separate files (test and train)
+        :param prediction is a prediction var for scenery
+        :return:
+        '''
+        # separate file name
+        archive_name = py_.filter_(list(drop_columns), lambda item: py_.ends_with(item, const.SCENERY))[const.FIRST_INDEX]
+        # identified drop columns set
+        drop_columns = set(drop_columns) & set(self.utility_scenery_function.get_column_headers_def())
+        # formatting scenery
+        self.clean_data(interval, drop_columns,archive_name)
+        # create scenery with temp formatting set
+        self.add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count,
+                                  create_complete_csv, prediction)
 
-    def predicate(param): historic_data_set.append(util_process_historical_values(df, historic_count, index, param))
-    py_.for_each(scenery_columns, predicate)
-    historic_final_data = np.array([item['cnv_date']])
+    @staticmethod
+    def time_variables_columns(key):
+        '''
+        time variables set
+        :param key: key to get variable value
+        :return:
+        '''
+        time = {const.MINUTE: const.MINUTE_TEXT,
+                const.HOUR: const.HOUR_TEXT,
+                const.MONTH: const.MONTH_TEXT,
+                const.SECOND: const.SECOND_TEXT,
+                const.YEAR: const.YEAR_TEXT}
+        return time.get(key)
 
-    for object_array in historic_data_set:
-        aux_column = np.array(object_array)
-        historic_final_data = np.concatenate((historic_final_data,aux_column))
+    def create_scenarios(self,interval, periodicity_key,historic_count,
+                         test_size, create_complete_csv,scenery, prediction):
+        '''
+        function that create "N" scenarios
+        :param interval:  it is the grouping parameter for data
+        :param periodicity_key: forward unit
+        :param historic_count: historic data count
+        :param test_size: percentage test value (o-1)
+        :param create_complete_csv: flag that allows to create complete scenery
+        or 2 separate files (test and train)
+        :param scenery: is a set of one or many scenery variables to drop
+        :param prediction: is a prediction for scenery could be None
+        '''
 
-    return historic_final_data
+        # use a set of data for scenery creation
+        drop_columns_data = scenery
 
+        # predicate that allows to create scenarios
+        def predicate(param): self.create_scenario(interval,param, periodicity_key, test_size,historic_count,
+                                                   create_complete_csv,prediction)
+        py_.for_each(drop_columns_data, predicate)
 
-def get_scenery_columns(drop_columns):
-    return get_column_headers_def() - drop_columns
+    def elements_comb_array(self):
+        columns_data = {}
+        array_elements = []
+        for item in range(const.VARIABLES):
+            array_elements_tmp = self.utility_scenery_function.comb(self.utility_scenery_function.get_combine_vars(),
+                                                                    item+1)
+            array_elements.extend(array_elements_tmp)
 
+        for x in range(enumerate(array_elements)):
+            archive_name = str(x) + '_scenery'
+            array_elements[x].insert(const.FIRST_INDEX,'location')
+            array_elements[x].insert(const.FIRST_INDEX,'node')
+            array_elements[x].insert(const.FIRST_INDEX,'date')
+            array_elements[x].insert(const.FIRST_INDEX, archive_name)
+            columns_data.update({archive_name:array_elements[x]})
 
-def util_process_historical_values(df, periodicity_key,start_index,col_name):
-    return df.iloc[start_index:periodicity_key + start_index][col_name].values
-
-
-def add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count,create_complete_csv):
-    # read clean csv
-    df = pandas.read_csv('../data/dataTemp.csv')
-
-    # transform object to date
-    df['cnv_date'] = pandas.to_datetime(df.cnv_date, infer_datetime_format=True)
-
-    # order by date desc
-    df = df.sort_values(by = 'cnv_date', ascending=0)
-
-    # add time variable for historical values
-    df[time_variables_columns(periodicity_key)] = previous_data_historic(periodicity_key,df)
-
-    # create new data
-    data = util_create_scenery(df,historic_count,drop_columns)
-
-    # separate train and test data from an percentage parameter
-    train, test = train_test_split(data, test_size=test_size)
-
-    # create 2 csv files, from train and test
-    test_path = '../data/results/' + archive_name + '_test' + '.csv'
-    train_path = '../data/results/' + archive_name + '_train' + '.csv'
-
-    train.to_csv(train_path,header=None,index=False)
-    test.to_csv(test_path,header=None,index=False)
-
-    # if you need complete data set
-    if create_complete_csv:
-        path = '../data/results/' + archive_name + '.csv'
-        data.to_csv(path, header=None, index=False)
-
-    print('*******Create Data Successfully*******')
-    print('******* ' + archive_name + ' Done' + '*******')
-
-
-def previous_data_historic(key,df):
-    historic_frequency = {'m': df['cnv_date'].dt.minute,
-                          'h': df['cnv_date'].dt.hour,
-                          'M': df['cnv_date'].dt.month,
-                          's': df['cnv_date'].dt.second,
-                          'y': df['cnv_date'].dt.year}
-    return historic_frequency.get(key)
-
-
-def create_scenarios(interval, drop_columns, periodicity_key, archive_name,
-                     test_size,historic_count, create_complete_csv):
-    clean_data(interval, drop_columns)
-    add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count, create_complete_csv)
-
-
-def time_variables_columns(key):
-    time = {'m': "minute",
-            'h': "hour}",
-            'M': "month",
-            's': "second",
-            'y': "dt.year"}
-    return time.get(key)
+        return columns_data
 
 
-def get_column_headers_def():
-    column_headers = {
-        'date'
-        ,'node'
-        ,'location'
-        ,'humidity'
-        ,'mq2','mq7'
-        ,'mq2_error'
-        ,'mq7_error'
-        , 'mq135_error'
-        , 'mq135'
-        ,'temperature'
-    }
-    return column_headers
-
-if __name__ == "__main__":
-    create_scenarios('T',{'date','node','location','humidity','mq2','mq7','mq2_error', 'mq7_error', 'mq135_error'},'m',
-                     '1_scenery', 0.3, 8, False)
-    create_scenarios('T',{'date','node','location','humidity','mq135','mq7','mq2_error', 'mq7_error', 'mq135_error'},'m',
-                    '2_scenery', 0.3, 8, False)
-    create_scenarios('T',{'date','node','location','humidity','mq135','mq2','mq2_error', 'mq7_error', 'mq135_error'},'m',
-                    '3_scenery', 0.3, 8, False)
-    # end first block
-    create_scenarios('T',{'date', 'node', 'location', 'temperature', 'mq2', 'mq7', 'mq2_error', 'mq7_error', 'mq135_error'},
-                     'm','4_scenery', 0.3, 8, False)
-    create_scenarios('T',{'date','node','location','temperature','mq135','mq7','mq2_error', 'mq7_error', 'mq135_error'},'m',
-                    '5_scenery', 0.3, 8, False)
-    create_scenarios('T',{'date','node','location','temperature','mq135','mq2','mq2_error', 'mq7_error', 'mq135_error'},'m',
-                    '6_scenery', 0.3, 8, False)
-    # end
-    create_scenarios('T',
-                     {'date', 'node', 'location',  'mq2', 'mq7', 'mq2_error', 'mq7_error', 'mq135_error'},
-                     'm', '7_scenery', 0.3, 8, False)
-    create_scenarios('T', {'date', 'node', 'location', 'mq135', 'mq7', 'mq2_error', 'mq7_error',
-                           'mq135_error'}, 'm',
-                     '8_scenery', 0.3, 8, False)
-    create_scenarios('T', {'date', 'node', 'location', 'mq135', 'mq2', 'mq2_error', 'mq7_error',
-                           'mq135_error'}, 'm',
-                     '9_scenery', 0.3, 8, False)
 
 
 

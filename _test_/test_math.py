@@ -1,5 +1,7 @@
 import unittest
+
 from faker import Faker
+
 from odd_number import OddNumber
 
 
@@ -21,3 +23,4 @@ class MathTestCase(unittest.TestCase):
         test_number = self.fake.random_number() * 2 + 1
         is_odd_number = OddNumber.odd_number(test_number)
         self.assertEquals(is_odd_number, False)
+
