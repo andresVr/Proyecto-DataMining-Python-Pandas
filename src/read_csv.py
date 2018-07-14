@@ -1,7 +1,7 @@
 from pandas import pandas
 from pydash import py_
 from sklearn.model_selection import train_test_split
-
+from termcolor import colored
 import constants as const
 import util_scenery_creation as sc_util
 
@@ -9,9 +9,17 @@ import util_scenery_creation as sc_util
 class ReadData:
 
     def __init__(self):
+        # util class object
         self.utility_scenery_function = sc_util.UtilitySceneryCreation.get_instance()
 
     def clean_data(self,interval, drop_columns, scenery_name):
+        '''
+        it allows to clean data to process
+        :param interval: it is the grouping parameter for data
+        :param drop_columns: it is a set of unnecessary columns
+        :param scenery_name: scenery name file
+        :return: nothing
+        '''
         print("*******Formatting Scenario Start*******")
 
         # put base data set to clean
@@ -37,8 +45,19 @@ class ReadData:
         clean_data_set.to_csv('../data/dataTemp.csv')
         print("*******Formatting Scenario" + scenery_name + "Done*******")
 
-
-    def add_previous_columns(self,drop_columns,periodicity_key, archive_name, test_size, historic_count,create_complete_csv):
+    def add_previous_columns(self,drop_columns,periodicity_key, archive_name, test_size, historic_count,
+                             create_complete_csv, prediction):
+        '''
+        formating data to create csv
+        :param drop_columns: columns set to drop
+        :param periodicity_key:
+        :param archive_name:
+        :param test_size:
+        :param historic_count:
+        :param create_complete_csv:
+        :param prediction: prediction for scenery creation
+        :return:
+        '''
         # read clean csv
         df = pandas.read_csv('../data/dataTemp.csv')
 
@@ -52,7 +71,7 @@ class ReadData:
         df[self.time_variables_columns(periodicity_key)] = self.utility_scenery_function.previous_data_historic(periodicity_key,df)
 
         # create new data
-        data = self.utility_scenery_function.util_create_scenery(df,historic_count,drop_columns)
+        data = self.utility_scenery_function.util_create_scenery(df,historic_count,drop_columns,prediction)
 
         if data is not None:
             # separate train and test data from an percentage parameter
@@ -71,23 +90,45 @@ class ReadData:
                 path = '../data/results/' + archive_name + '.csv'
                 data.to_csv(path, index=False)
 
-            print('*******Create Data Successfully*******')
-            print('******* ' + archive_name + ' Done' + '*******')
+            print(colored('*******Create Data Successfully*******','green'))
+            print(colored('******* ' + archive_name + ' Done' + '*******','green'))
 
         else:
-            print('*******The scenery do not have mq variable to predict*******')
-            print('******* ' + archive_name + ' Dropped' + '*******')
+            print(colored('*******The scenery do not have mq variable to predict*******','red'))
+            print(colored('******* ' + archive_name + ' Dropped' + '*******','red'))
 
 
     def create_scenario(self,interval, drop_columns, periodicity_key,
-                        test_size,historic_count, create_complete_csv):
+                        test_size,historic_count, create_complete_csv,prediction):
+        '''
+        it allows to separate archive name to the complete set
+        :param interval: it is the grouping parameter for data
+        :param drop_columns: drop columns data set
+        :param periodicity_key: forward unit
+        :param test_size: percentage test value (o-1)
+        :param historic_count: historic data count
+        :param create_complete_csv: flag that allows to create complete scenery
+        or 2 separate files (test and train)
+        :param prediction is a prediction var for scenery
+        :return:
+        '''
+        # separate file name
         archive_name = py_.filter_(list(drop_columns), lambda item: py_.ends_with(item, const.SCENERY))[const.FIRST_INDEX]
+        # identified drop columns set
         drop_columns = set(drop_columns) & set(self.utility_scenery_function.get_column_headers_def())
+        # formatting scenery
         self.clean_data(interval, drop_columns,archive_name)
-        self.add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count, create_complete_csv)
+        # create scenery with temp formatting set
+        self.add_previous_columns(drop_columns,periodicity_key, archive_name, test_size, historic_count,
+                                  create_complete_csv, prediction)
 
 
     def time_variables_columns(self,key):
+        '''
+        time variables set
+        :param key: key to get variable value
+        :return:
+        '''
         time = {const.MINUTE: const.MINUTE_TEXT,
                 const.HOUR: const.HOUR_TEXT,
                 const.MONTH: const.MONTH_TEXT,
@@ -96,17 +137,26 @@ class ReadData:
         return time.get(key)
 
     def create_scenarios(self,interval, periodicity_key,historic_count,
-                         test_size, create_complete_csv,scenery):
+                         test_size, create_complete_csv,scenery, prediction):
+        '''
+        function that create "N" scenarios
+        :param interval:  it is the grouping parameter for data
+        :param periodicity_key: forward unit
+        :param historic_count: historic data count
+        :param test_size: percentage test value (o-1)
+        :param create_complete_csv: flag that allows to create complete scenery
+        or 2 separate files (test and train)
+        :param scenery: is a set of one or many scenery variables to drop
+        :param prediction: is a prediction for scenery could be None
+        '''
 
-
-        #drop_columns_data = elements_comb_array()
+        # use a set of data for scenery creation
         drop_columns_data = scenery
 
-        def predicate(param): self.create_scenario(interval,param, periodicity_key, test_size,historic_count, create_complete_csv)
+        # predicate that allows to create scenarios
+        def predicate(param): self.create_scenario(interval,param, periodicity_key, test_size,historic_count,
+                                                   create_complete_csv,prediction)
         py_.for_each(drop_columns_data, predicate)
-
-    def specific_scenery(self):
-        return {'scenery': {'scenery', 'date', 'node', 'location', 'humidity','temperature'}}
 
     def elements_comb_array(self):
         columns_data = {}
