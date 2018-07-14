@@ -6,7 +6,9 @@ if __name__ == "__main__":
 
     try:
         create_scenario_obj = sc_util.ReadData()
-        create_scenario_obj.create_scenarios('10T', 'm', 3, 0.3, True,create_scenario_obj.elements_comb_array())
+        create_scenario_obj.create_scenarios('T', 'm', 7, 0.3, True,create_scenario_obj.elements_comb_array())
     except:
         print("****Not enough data to process, SCENERY PROCESS DONE***")
     #elements_comb_array()
+
+POWER(10,((LOG(Resistencia '2018-07-07 03:00:00')−2.3)÷0.21)+(−0.47))
